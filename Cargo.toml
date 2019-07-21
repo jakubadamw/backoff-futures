@@ -3,8 +3,14 @@ name = "backoff-futures"
 version = "0.1.0"
 
 authors = ["Jakub Wieczorek <jakub.adam.wieczorek@gmail.com>"]
+keywords = ["backoff", "exponential", "futures"]
+license = "MIT"
+repository = "https://github.com/jakubadamw/backoff-futures"
 
 edition = "2018"
+
+[badges]
+azure-devops = { project = "jakubadamw", pipeline = "github", build = "3" }
 
 [dependencies]
 backoff = "0.1"

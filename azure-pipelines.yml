@@ -1,0 +1,19 @@
+trigger:
+- master
+pool:
+  vmImage: 'ubuntu-latest'
+steps:
+- script: |
+    curl https://sh.rustup.rs -sSf | sh -s -- -y
+    echo "##vso[task.setvariable variable=PATH;]$PATH:$HOME/.cargo/bin"
+  displayName: Install rustup
+- script: cargo
+  displayName: Install the required version of Rust
+- script: rustup component add clippy
+  displayName: Install the linter (Clippy)
+- script: cargo build --all
+  displayName: Build [cargo build]
+- script: cargo clippy --all-targets --all-features -- -D warnings -A clippy::needless-lifetimes
+  displayName: Run the linter [cargo clippy]
+- script: cargo test --all
+  displayName: Test [cargo test]
