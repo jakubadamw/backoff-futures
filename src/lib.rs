@@ -1,12 +1,63 @@
-#![feature(async_await)]
+//! An add-on to [`std::future::Future`] that makes it easy to introduce a retry mechanism
+//! with a backoff for functions that produce failible futures,
+//! i.e. futures where the `Output` type is some `Result<T, backoff::Error<E>>`.
+//! The `backoff::Error` wrapper is necessary so as to distinguish errors that are considered
+//! *transient*, and thus make it likely that a future attempt at producing and blocking on
+//! the same future could just as well succeed (e.g. the HTTP 503 Service Unavailable error),
+//! and errors that are considered *permanent*, where no future attempts are presumed to have
+//! a chance to succeed (e.g. the HTTP 404 Not Found error).
+//!
+//! The extension trait integrates with the `backoff` crate and expects a [`backoff::backoff::Backoff`]
+//! value to describe the various properties of the retry & backoff mechanism to be used.
+//!
+//! ```rust
+//! #![feature(async_await)]
+//!
+//! fn isahc_error_to_backoff(err: isahc::Error) -> backoff::Error<isahc::Error> {
+//!     match err {
+//!         isahc::Error::Aborted | isahc::Error::Io(_) | isahc::Error::Timeout =>
+//!             backoff::Error::Transient(err),
+//!         _ =>
+//!             backoff::Error::Permanent(err)
+//!     }
+//! }
+//!
+//! async fn get_example_contents() -> Result<String, backoff::Error<isahc::Error>> {
+//!     use isahc::ResponseExt;
+//!
+//!     let mut response = isahc::get_async("https://example.org")
+//!         .await
+//!         .map_err(isahc_error_to_backoff)?;
+//!
+//!     response
+//!         .text_async()
+//!         .await
+//!         .map_err(|err: std::io::Error| backoff::Error::Transient(isahc::Error::Io(err)))
+//! }
+//!
+//! async fn get_example_contents_with_retry() -> Result<String, isahc::Error> {
+//!     use backoff_futures::BackoffExt;
+//!
+//!     let mut backoff = backoff::ExponentialBackoff::default();
+//!     get_example_contents.with_backoff(&mut backoff)
+//!         .await
+//!         .map_err(|err| match err {
+//!             backoff::Error::Transient(err) | backoff::Error::Permanent(err) => err
+//!         })
+//! }
+//! ```
+//!
+//! See [`BackoffExt::with_backoff`] for more details.
+
+#![cfg_attr(test, feature(async_await))]
 
 #[cfg(test)] #[macro_use] extern crate matches;
 
+use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use backoff::backoff::{Backoff};
-use futures::Future;
 
 enum BackoffState<Fut> {
     Pending,
@@ -21,11 +72,23 @@ pub struct BackoffFuture<'b, Fut, B, F> {
     f: F
 }
 
-pub trait TryFutureExt<Fut, B, F> {
+pub trait BackoffExt<Fut, B, F> {
+    /// Returns a future that, when polled, will first ask `self` for a new future (with an output
+    /// type `Result<T, backoff::Error<_>>` to produce the expected result.
+    ///
+    /// If the underlying future is ready with an `Err` value, the nature of the error
+    /// (permanent/transient) will determine whether polling the future will employ the provided
+    /// `backoff` strategy and will result in the the work being retried.
+    ///
+    /// Specifically, `backoff::Error::Permanent` errors will be returned immediately.
+    /// [`backoff::Error::Transient`] errors will, depending on the particular [`backoff::backoff::Backoff`],
+    /// result in a retry attempt, most likely with a delay.
+    ///
+    /// If the underlying future is ready with an `Ok` value, it will be returned immediately.
     fn with_backoff(self, backoff: &mut B) -> BackoffFuture<'_, Fut, B, F>;
 }
 
-impl<Fut, T, E, B, F> TryFutureExt<Fut, B, F> for F
+impl<Fut, T, E, B, F> BackoffExt<Fut, B, F> for F
      where F: FnMut() -> Fut,
            Fut: Future<Output = Result<T, backoff::Error<E>>> {
     fn with_backoff(self, backoff: &mut B) -> BackoffFuture<'_, Fut, B, F> {
@@ -38,7 +101,7 @@ impl<Fut, T, E, B, F> TryFutureExt<Fut, B, F> for F
 }
 
 impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
-    where Fut: futures::Future<Output = Result<T, backoff::Error<E>>>,
+    where Fut: Future<Output = Result<T, backoff::Error<E>>>,
           F: FnMut() -> Fut + Unpin,
           B: Backoff + Unpin
 {
@@ -99,7 +162,7 @@ impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
 #[cfg(test)]
 mod tests {
     use futures::Future;
-    use super::TryFutureExt;
+    use super::BackoffExt;
 
     #[test]
     fn test_when_future_succeeds() {

@@ -1,5 +1,6 @@
 [package]
 name = "backoff-futures"
+description = "A retry and backoff mechanism for `std::future::Future`"
 version = "0.1.0"
 
 authors = ["Jakub Wieczorek <jakub.adam.wieczorek@gmail.com>"]
@@ -14,8 +15,9 @@ azure-devops = { project = "jakubadamw", pipeline = "github", build = "3" }
 
 [dependencies]
 backoff = "0.1"
-futures-preview = { version = "=0.3.0-alpha.17", features = ["async-await", "nightly"] }
-tokio-timer = { git = "https://github.com/tokio-rs/tokio" }
+tokio-timer = "0.2.0-alpha.1"
 
 [dev-dependencies]
+futures-preview = "0.3.0-alpha.17"
+isahc = "0.6.0"
 matches = "0.1"
