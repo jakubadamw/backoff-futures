@@ -1,10 +1,13 @@
 # backoff-futures
 
 [![Build Status](https://dev.azure.com/jakubadamw/github/_apis/build/status/jakubadamw.backoff-futures?branchName=master)](https://dev.azure.com/jakubadamw/github/_build/latest?definitionId=3&branchName=master)
-[![crates.io: backoff-futures](https://img.shields.io/crates/v/backoff-futures.svg)](https://crates.io/crates/backoff-futures)
+[![crates.io](https://img.shields.io/crates/v/backoff-futures.svg)](https://crates.io/crates/backoff-futures)
+[![docs.rs](https://docs.rs/backoff-futures/badge.svg)](https://docs.rs/backoff-futures/latest/backoff_futures/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A retry and backoff mechanism for `std::future::Future`.
+
+[Documentation](https://docs.rs/backoff-futures/latest/backoff_futures/)
 
 ## Adding as a dependency
 
