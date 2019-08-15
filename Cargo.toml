@@ -1,7 +1,7 @@
 [package]
 name = "backoff-futures"
 description = "A retry and backoff mechanism for `std::future::Future`"
-version = "0.1.0"
+version = "0.1.1"
 
 authors = ["Jakub Wieczorek <jakub.adam.wieczorek@gmail.com>"]
 keywords = ["backoff", "exponential", "futures"]
@@ -11,7 +11,7 @@ repository = "https://github.com/jakubadamw/backoff-futures"
 edition = "2018"
 
 [badges]
-azure-devops = { project = "jakubadamw", pipeline = "github", build = "3" }
+azure-devops = { project = "jakubadamw/github", pipeline = "jakubadamw.backoff-futures", build = "3" }
 
 [dependencies]
 backoff = "0.1"
