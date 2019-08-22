@@ -1,6 +1,6 @@
 # backoff-futures
 
-[![Build Status](https://dev.azure.com/jakubadamw/github/_apis/build/status/jakubadamw.backoff-futures?branchName=master)](https://dev.azure.com/jakubadamw/github/_build/latest?definitionId=3&branchName=master)
+![Build status](https://github.com/jakubadamw/backoff-futures/workflows/Build/badge.svg)
 [![crates.io](https://img.shields.io/crates/v/backoff-futures.svg)](https://crates.io/crates/backoff-futures)
 [![docs.rs](https://docs.rs/backoff-futures/badge.svg)](https://docs.rs/backoff-futures/latest/backoff_futures/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

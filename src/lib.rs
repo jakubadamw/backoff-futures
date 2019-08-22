@@ -11,8 +11,6 @@
 //! value to describe the various properties of the retry & backoff mechanism to be used.
 //!
 //! ```rust
-//! #![feature(async_await)]
-//!
 //! fn isahc_error_to_backoff(err: isahc::Error) -> backoff::Error<isahc::Error> {
 //!     match err {
 //!         isahc::Error::Aborted | isahc::Error::Io(_) | isahc::Error::Timeout =>
@@ -48,8 +46,6 @@
 //! ```
 //!
 //! See [`BackoffExt::with_backoff`] for more details.
-
-#![cfg_attr(test, feature(async_await))]
 
 #[cfg(test)] #[macro_use] extern crate matches;
 
