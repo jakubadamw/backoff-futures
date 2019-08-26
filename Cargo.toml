@@ -10,14 +10,11 @@ repository = "https://github.com/jakubadamw/backoff-futures"
 
 edition = "2018"
 
-[badges]
-azure-devops = { project = "jakubadamw/github", pipeline = "jakubadamw.backoff-futures", build = "3" }
-
 [dependencies]
 backoff = "0.1"
-tokio-timer = "0.2.0-alpha.1"
+tokio-timer = "0.2.0-alpha.2"
 
 [dev-dependencies]
-futures-preview = "0.3.0-alpha.17"
-isahc = "0.6.0"
+futures-preview = "0.3.0-alpha.18"
+isahc = "0.7"
 matches = "0.1"

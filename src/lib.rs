@@ -87,7 +87,7 @@ pub trait BackoffExt<Fut, B, F> {
 impl<Fut, T, E, B, F> BackoffExt<Fut, B, F> for F
      where F: FnMut() -> Fut,
            Fut: Future<Output = Result<T, backoff::Error<E>>> {
-    fn with_backoff(self, backoff: &mut B) -> BackoffFuture<'_, Fut, B, F> {
+    fn with_backoff(self, backoff: &mut B) -> BackoffFuture<'_, Fut, B, Self> {
         BackoffFuture {
             f: self,
             state: BackoffState::Pending,
@@ -122,10 +122,7 @@ impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
                         Poll::Pending => return Poll::Pending,
 
                         Poll::Ready(value) => match value {
-                            Ok(_) =>
-                                return Poll::Ready(value),
-
-                            Err(backoff::Error::Permanent(_)) =>
+                            Ok(_) | Err(backoff::Error::Permanent(_)) =>
                                 return Poll::Ready(value),
 
                             Err(backoff::Error::Transient(_)) => unsafe {
