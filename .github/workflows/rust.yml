@@ -1,6 +1,9 @@
 name: Build
 
-on: [push]
+on:
+  push:
+    branches:
+    - master
 
 jobs:
   build:
@@ -8,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        toolchain: [beta, stable, nightly]
+        toolchain: [stable, beta, nightly]
 
     steps:
     - uses: actions/checkout@v1
@@ -23,5 +26,7 @@ jobs:
       if: matrix.toolchain == 'nightly'
     - name: Install Clippy
       run: rustup component add clippy
+      if: matrix.toolchain == 'nightly'
     - name: Run Clippy
       run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::pedantic
+      if: matrix.toolchain == 'nightly'
