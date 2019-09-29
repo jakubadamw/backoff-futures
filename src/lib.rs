@@ -104,7 +104,6 @@ impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
     type Output = Fut::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        use tokio_timer::Delay;
         use std::time::Instant;
 
         // The loop will be passed at most twice.
@@ -129,7 +128,7 @@ impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
                                 let mut s = self.as_mut().get_unchecked_mut();
                                 match s.backoff.next_backoff() {
                                     Some(next) => {
-                                        let delay = Delay::new(Instant::now() + next);
+                                        let delay = tokio_timer::delay(Instant::now() + next);
                                         s.state = BackoffState::Delay(delay);
                                     }
                                     None =>
