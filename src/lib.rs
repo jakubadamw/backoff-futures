@@ -57,7 +57,7 @@ use backoff::backoff::{Backoff};
 
 enum BackoffState<Fut> {
     Pending,
-    Delay(tokio_timer::Delay),
+    Delay(tokio::time::Delay),
     Work(Fut)
 }
 
@@ -104,8 +104,6 @@ impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
     type Output = Fut::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        use std::time::Instant;
-
         // The loop will be passed at most twice.
         loop {
             match self.as_mut().state {
@@ -128,7 +126,7 @@ impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
                                 let mut s = self.as_mut().get_unchecked_mut();
                                 match s.backoff.next_backoff() {
                                     Some(next) => {
-                                        let delay = tokio_timer::delay(Instant::now() + next);
+                                        let delay = tokio::time::delay_for(next);
                                         s.state = BackoffState::Delay(delay);
                                     }
                                     None =>
