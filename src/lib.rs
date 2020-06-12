@@ -47,114 +47,113 @@
 //!
 //! See [`BackoffExt::with_backoff`] for more details.
 
-#[cfg(test)] #[macro_use] extern crate matches;
+#![allow(clippy::type_repetition_in_bounds)]
 
+use backoff::backoff::Backoff;
+use backoff::Error;
 use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::time::Duration;
 
-use backoff::backoff::{Backoff};
-
-pub mod alt_impl;
-
-enum BackoffState<Fut> {
-    Pending,
-    Delay(tokio::time::Delay),
-    Work(Fut)
-}
-
-#[must_use = "futures do nothing unless you `.await` or poll them"]
-pub struct BackoffFuture<'b, Fut, B, F> {
-    state: BackoffState<Fut>,
-    backoff: &'b mut B,
-    f: F
-}
-
-pub trait BackoffExt<Fut, B, F> {
-    /// Returns a future that, when polled, will first ask `self` for a new future (with an output
-    /// type `Result<T, backoff::Error<_>>` to produce the expected result.
-    ///
-    /// If the underlying future is ready with an `Err` value, the nature of the error
-    /// (permanent/transient) will determine whether polling the future will employ the provided
-    /// `backoff` strategy and will result in the the work being retried.
-    ///
-    /// Specifically, `backoff::Error::Permanent` errors will be returned immediately.
-    /// [`backoff::Error::Transient`] errors will, depending on the particular [`backoff::backoff::Backoff`],
-    /// result in a retry attempt, most likely with a delay.
-    ///
-    /// If the underlying future is ready with an `Ok` value, it will be returned immediately.
-    fn with_backoff(self, backoff: &mut B) -> BackoffFuture<'_, Fut, B, F>;
-}
-
-impl<Fut, T, E, B, F> BackoffExt<Fut, B, F> for F
-     where F: FnMut() -> Fut,
-           Fut: Future<Output = Result<T, backoff::Error<E>>> {
-    fn with_backoff(self, backoff: &mut B) -> BackoffFuture<'_, Fut, B, Self> {
-        BackoffFuture {
-            f: self,
-            state: BackoffState::Pending,
-            backoff
-        }
-    }
-}
-
-impl<Fut, F, B, T, E> Future for BackoffFuture<'_, Fut, B, F>
-    where Fut: Future<Output = Result<T, backoff::Error<E>>>,
-          F: FnMut() -> Fut + Unpin,
-          B: Backoff + Unpin
+struct BackoffFutureBuilder<'b, B, F, Fut, T, E>
+where
+    B: Backoff,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, Error<E>>>,
 {
-    type Output = Fut::Output;
+    backoff: &'b mut B,
+    f: F,
+}
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // The loop will be passed at most twice.
+impl<'b, B, F, Fut, T, E> BackoffFutureBuilder<'b, B, F, Fut, T, E>
+where
+    B: Backoff,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, Error<E>>>,
+{
+    async fn fut<N: FnMut(&Error<E>, Duration)>(mut self, mut notify: N) -> Result<T, Error<E>> {
         loop {
-            match self.as_mut().state {
-                BackoffState::Work(_) => {
-                    let fut = unsafe {
-                        self.as_mut().map_unchecked_mut(|s| match s.state {
-                            BackoffState::Work(ref mut f) => f,
-                            _ => unreachable!()
-                        })
-                    };
-        
-                    match fut.poll(cx) {
-                        Poll::Pending => return Poll::Pending,
-
-                        Poll::Ready(value) => match value {
-                            Ok(_) | Err(backoff::Error::Permanent(_)) =>
-                                return Poll::Ready(value),
-
-                            Err(backoff::Error::Transient(_)) => unsafe {
-                                let mut s = self.as_mut().get_unchecked_mut();
-                                match s.backoff.next_backoff() {
-                                    Some(next) => {
-                                        let delay = tokio::time::delay_for(next);
-                                        s.state = BackoffState::Delay(delay);
-                                    }
-                                    None =>
-                                        return Poll::Ready(value)
-                                }
-                            }
-                        }
+            let work_result = (self.f)().await;
+            match work_result {
+                Ok(_) | Err(Error::Permanent(_)) => return work_result,
+                Err(err @ Error::Transient(_)) => {
+                    if let Some(backoff_duration) = self.backoff.next_backoff() {
+                        notify(&err, backoff_duration);
+                        tokio::time::delay_for(backoff_duration).await
+                    } else {
+                        return Err(err);
                     }
-                }
-
-                BackoffState::Delay(ref delay) if !delay.is_elapsed() =>
-                    return Poll::Pending,
-
-                _ => unsafe {
-                    let mut s = self.as_mut().get_unchecked_mut();
-                    s.state = BackoffState::Work((s.f)());
                 }
             }
         }
     }
 }
 
+#[async_trait::async_trait(?Send)]
+pub trait BackoffExt<T, E, Fut, F> {
+    /// Returns a future that, when polled, will first ask `self` for a new future (with an output
+    /// type `Result<T, backoff::Error<_>>` to produce the expected result.
+    ///
+    /// If the underlying future is ready with an `Err` value, the nature of the error
+    /// (permanent/transient) will determine whether polling the future will employ the provided
+    /// `backoff` strategy and will result in the work being retried.
+    ///
+    /// Specifically, [`backoff::Error::Permanent`] errors will be returned immediately.
+    /// [`backoff::Error::Transient`] errors will, depending on the particular [`backoff::backoff::Backoff`],
+    /// result in a retry attempt, most likely with a delay.
+    ///
+    /// If the underlying future is ready with an [`std::result::Result::Ok`] value, it will be returned immediately.
+    async fn with_backoff<B>(self, backoff: &mut B) -> Result<T, Error<E>>
+    where
+        B: Backoff,
+        T: 'async_trait,
+        E: 'async_trait,
+        Fut: 'async_trait;
+    
+    /// Same as [`BackoffExt::with_backoff`] but takes an extra `notify` closure that will be called every time
+    /// a new backoff is employed on transient errors. The closure takes the new delay duration as an argument.
+    async fn with_backoff_notify<B, N>(self, backoff: &mut B, notify: N) -> Result<T, Error<E>>
+    where
+        B: Backoff,
+        N: FnMut(&Error<E>, Duration),
+        T: 'async_trait,
+        E: 'async_trait,
+        Fut: 'async_trait;
+}
+
+#[async_trait::async_trait(?Send)]
+impl<T, E, Fut, F> BackoffExt<T, E, Fut, F> for F
+     where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<T, backoff::Error<E>>> {
+
+    async fn with_backoff<B>(self, backoff: &mut B) -> Result<T, Error<E>>
+    where
+        B: Backoff,
+        T: 'async_trait,
+        E: 'async_trait,
+        Fut: 'async_trait
+    {
+        let backoff_struct = BackoffFutureBuilder { backoff, f: self };
+        backoff_struct.fut(|_, _| {}).await
+    }
+
+    async fn with_backoff_notify<B, N>(self, backoff: &mut B, notify: N) -> Result<T, Error<E>>
+    where
+        B: Backoff,
+        N: FnMut(&Error<E>, Duration),
+        T: 'async_trait,
+        E: 'async_trait,
+        Fut: 'async_trait
+    {
+        let backoff_struct = BackoffFutureBuilder { backoff, f: self };
+        backoff_struct.fut(notify).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use futures::Future;
     use super::BackoffExt;
+    use futures::Future;
 
     #[test]
     fn test_when_future_succeeds() {
@@ -182,6 +181,8 @@ mod tests {
 
     #[test]
     fn test_with_closure_when_future_fails_with_permanent_error() {
+        use matches::assert_matches;
+
         let do_work = || {
             let result = Err(backoff::Error::Permanent(()));
             futures::future::ready(result)
@@ -196,12 +197,51 @@ mod tests {
     #[test]
     fn test_with_async_fn_when_future_succeeds() {
         async fn do_work() -> Result<u32, backoff::Error<()>> {
-            futures::future::ready(Ok(123)).await
+            Ok(123)
         }
 
         let mut backoff = backoff::ExponentialBackoff::default();
         let result: Result<u32, backoff::Error<()>> =
             futures::executor::block_on(do_work.with_backoff(&mut backoff));
+        assert_eq!(result.ok(), Some(123));
+    }
+
+    #[test]
+    fn test_with_async_fn_when_future_fails_for_some_time() {
+        static mut CALL_COUNTER: usize = 0;
+        const CALLS_TO_SUCCESS: usize = 5;
+
+        use std::time::Duration;
+
+        async fn do_work() -> Result<u32, backoff::Error<()>> {
+            unsafe {
+                CALL_COUNTER += 1;
+                if CALL_COUNTER == CALLS_TO_SUCCESS {
+                    Ok(123)
+                } else {
+                    Err(backoff::Error::Transient(()))
+                }
+            }
+        };
+
+        let mut backoff = backoff::ExponentialBackoff::default();
+        backoff.current_interval = Duration::from_millis(1);
+        backoff.initial_interval = Duration::from_millis(1);
+
+        let mut notify_counter = 0;
+
+        let mut runtime = tokio::runtime::Runtime::new()
+            .expect("tokio runtime creation");
+
+        let result = runtime.block_on(do_work.with_backoff_notify(&mut backoff, |e, d| {
+            notify_counter += 1;
+            println!("Error {:?}, waiting for: {}", e, d.as_millis());
+        }));
+
+        unsafe {
+            assert_eq!(CALL_COUNTER, CALLS_TO_SUCCESS);
+        }
+        assert_eq!(CALLS_TO_SUCCESS, notify_counter + 1);
         assert_eq!(result.ok(), Some(123));
     }
 }

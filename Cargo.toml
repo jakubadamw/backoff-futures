@@ -11,10 +11,11 @@ repository = "https://github.com/jakubadamw/backoff-futures"
 edition = "2018"
 
 [dependencies]
+async-trait = "0.1"
 backoff = "0.1"
 tokio = { version = "0.2.1", features = ["time"] }
 
 [dev-dependencies]
 futures = "0.3"
-isahc = "0.7"
+isahc = "0.9"
 matches = "0.1"
