@@ -15,7 +15,7 @@ A retry and backoff mechanism for `std::future::Future`.
 
 ```toml
 [dependencies]
-backoff-futures = "0.1"
+backoff-futures = "0.3"
 ```
 
 ### With `cargo-edit`
