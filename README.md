@@ -1,9 +1,8 @@
 # backoff-futures
 
-![Build status](https://github.com/jakubadamw/backoff-futures/workflows/Build/badge.svg)
+### DEPRECATED: see `backoff::future`.
+
 [![crates.io](https://img.shields.io/crates/v/backoff-futures.svg)](https://crates.io/crates/backoff-futures)
-[![docs.rs](https://docs.rs/backoff-futures/badge.svg)](https://docs.rs/backoff-futures/latest/backoff_futures/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A retry and backoff mechanism for `std::future::Future`.
 
@@ -16,12 +15,6 @@ A retry and backoff mechanism for `std::future::Future`.
 ```toml
 [dependencies]
 backoff-futures = "0.3"
-```
-
-### With `cargo-edit`
-
-```
-cargo add backoff-futures
 ```
 
 ## Usage
